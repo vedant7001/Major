@@ -35,12 +35,18 @@ def load_model(model_path, config):
     
     # Create model with enhanced error handling for PyTorch classes
     try:
-        model = get_model(
-            config['model']['model_name'],
-            num_classes=config['model']['num_classes'],
-            pretrained=False,
-            version=config['model']['version']
-        )
+        # Disable Streamlit file watcher during model loading
+        from streamlit.runtime.scriptrunner import RerunData, RerunException
+        import warnings
+        
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            model = get_model(
+                config['model']['model_name'],
+                num_classes=config['model']['num_classes'],
+                pretrained=False,
+                version=config['model']['version']
+            )
     except RuntimeError as e:
         if "Tried to instantiate class" in str(e):
             st.error("Error loading model: PyTorch class initialization failed")
@@ -50,7 +56,21 @@ def load_model(model_path, config):
         if "__path__" in str(e):
             st.error("Error loading model: Streamlit watcher conflict with PyTorch")
             return None, None
-        raise
+        except Exception as e:
+            st.error(f"Unexpected error loading model: {str(e)}")
+            return None, None
+    
+    # Load model weights
+    try:
+        checkpoint = torch.load(model_path, map_location=device)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        model = model.to(device)
+        model.eval()
+    except Exception as e:
+        st.error(f"Error loading model weights: {str(e)}")
+        return None, None
+    
+    return model, device
     
     # Load model weights
     checkpoint = torch.load(model_path, map_location=device)
