@@ -270,3 +270,33 @@ def main():
 # Run the app
 if __name__ == "__main__":
     main()
+
+
+import gdown
+
+# Google Drive folder ID
+folder_id = "1wh67S5wGO2VnJg4IjNWwQrrj99n7qqy6"
+
+# Check if model files already exist
+models_dir = os.path.join("Model", "checkpoints")
+if os.path.exists(models_dir) and os.listdir(models_dir):
+    st.info("Model files already exist, skipping download.")
+else:
+    # Create directory if it doesn't exist
+    os.makedirs(models_dir, exist_ok=True)
+    
+    # Download with error handling
+    try:
+        st.info("Downloading model files from Google Drive...")
+        gdown.download_folder(f"https://drive.google.com/drive/folders/{folder_id}", 
+                            output=models_dir, 
+                            quiet=False, 
+                            use_cookies=False)
+        
+        # Verify download
+        if not os.listdir(models_dir):
+            st.error("Download failed - no files were downloaded")
+        else:
+            st.success("Model files downloaded successfully")
+    except Exception as e:
+        st.error(f"Failed to download model files: {str(e)}")
