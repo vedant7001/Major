@@ -11,9 +11,13 @@ from torchvision import transforms
 import asyncio
 import nest_asyncio
 
-# Initialize event loop for Streamlit
-nest_asyncio.apply()
-asyncio.set_event_loop(asyncio.new_event_loop())
+# Initialize event loop for Streamlit with error handling
+try:
+    nest_asyncio.apply()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+except Exception as e:
+    st.error(f"Error initializing event loop: {str(e)}")
 
 from models.models import get_model
 from utils.visualization import visualize_gradcam
@@ -29,7 +33,7 @@ def load_model(model_path, config):
     """Load a trained model"""
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
-    # Create model with error handling for PyTorch classes
+    # Create model with enhanced error handling for PyTorch classes
     try:
         model = get_model(
             config['model']['model_name'],
@@ -40,6 +44,11 @@ def load_model(model_path, config):
     except RuntimeError as e:
         if "Tried to instantiate class" in str(e):
             st.error("Error loading model: PyTorch class initialization failed")
+            return None, None
+        raise
+    except AttributeError as e:
+        if "__path__" in str(e):
+            st.error("Error loading model: Streamlit watcher conflict with PyTorch")
             return None, None
         raise
     
