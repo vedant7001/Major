@@ -11,3 +11,4 @@ tensorboard>=2.4.0
 streamlit>=1.0.0
 pillow>=8.0.0
 gdown>=4.0.0
+nest_asyncio>=1.5.5
