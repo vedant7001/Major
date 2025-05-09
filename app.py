@@ -140,15 +140,29 @@ def load_model(model_path, config):
                     # Google Drive file ID for the model
                     file_id = "1wh67S5wGO2VnJg4IjNWwQrrj99n7qqy6"
                     output = f"{os.path.dirname(model_path)}/downloaded_model.pth"
+                    
+                    # Clear any existing download attempts
+                    if os.path.exists(output):
+                        os.remove(output)
+                        
                     gdown.download(f"https://drive.google.com/uc?id={file_id}", output, quiet=False)
+                    
+                    # Verify download was successful
+                    if not os.path.exists(output):
+                        st.error("Download failed - file not created")
+                        return None, None
+                        
                     checkpoint = torch.load(output, map_location=device)
                     model.load_state_dict(checkpoint['model_state_dict'])
                     model = model.to(device)
                     model.eval()
-                    st.success("Model downloaded successfully!")
+                    st.success("Model downloaded and loaded successfully!")
                     return model, device
                 except Exception as download_error:
                     st.error(f"Failed to download model: {str(download_error)}")
+                    # Clean up partial downloads
+                    if os.path.exists(output):
+                        os.remove(output)
                     return None, None
         else:
             st.error(f"Error loading model weights: {str(e)}")
