@@ -196,7 +196,7 @@ def main():
             return
     available_models = [d for d in os.listdir(models_dir) if os.path.isdir(os.path.join(models_dir, d))]
     if not available_models:
-        st.error("No trained models found. Please train a model first.")
+        st.error("No trained models found. Please train a model first or ensure checkpoint files are present in the correct directory. If you recently downloaded models, verify extraction was successful and the .pth checkpoint files exist in each model folder.")
         return
     
     # Model selection
