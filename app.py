@@ -30,23 +30,36 @@ st.set_page_config(page_title="Breast Cancer Classification", layout="wide")
 
 # Define functions
 def load_model(model_path, config):
-    """Load a trained model"""
+    """Load a trained model with enhanced error handling"""
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
-    # Create model with enhanced error handling for PyTorch classes
+    # Create model with comprehensive error handling
     try:
         # Disable Streamlit file watcher during model loading
-        from streamlit.runtime.scriptrunner import RerunData, RerunException
         import warnings
+        from streamlit.runtime.scriptrunner import RerunData, RerunException
+        
+        # Temporarily disable Streamlit's file watcher
+        st.runtime.scriptrunner.add_script_run_ctx = lambda *args, **kwargs: None
         
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
+            
+            # Initialize new event loop for PyTorch operations
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
             model = get_model(
                 config['model']['model_name'],
                 num_classes=config['model']['num_classes'],
                 pretrained=False,
                 version=config['model']['version']
             )
+            
+            # Restore original event loop
+            loop.close()
+            asyncio.set_event_loop(asyncio.new_event_loop())
+            
     except RuntimeError as e:
         if "Tried to instantiate class" in str(e):
             st.error("Error loading model: PyTorch class initialization failed")
