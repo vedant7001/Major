@@ -3,10 +3,11 @@ import streamlit as st
 import torch
 import numpy as np
 from PIL import Image
-import cv2
 from torchvision import transforms
 import gdown
 import zipfile
+import traceback
+import shutil
 
 # Set page config
 st.set_page_config(
@@ -28,51 +29,47 @@ def download_models(models_dir, source_type="gdrive", source_path=None):
     # Create models directory if it doesn't exist
     os.makedirs(models_dir, exist_ok=True)
     
-    if not os.listdir(models_dir):
-        with st.spinner(f"Loading models from {source_type}..."):
-            try:
-                if source_type == "gdrive":
-                    # Default Google Drive folder ID
-                    folder_id = "1wh67S5wGO2VnJg4IjNWwQrrj99n7qqy6"
-                    OUTPUT_ZIP = os.path.join(os.getcwd(), "models.zip")
-                    
-                    # Download the folder
-                    gdown.download_folder(id=folder_id, output=models_dir, quiet=False)
-                    
-                    # Check if files were downloaded directly or as a zip
-                    if os.path.exists(OUTPUT_ZIP):
-                        with zipfile.ZipFile(OUTPUT_ZIP, 'r') as zip_ref:
-                            zip_ref.extractall(models_dir)
-                        os.remove(OUTPUT_ZIP)
+    with st.spinner(f"Loading models from {source_type}..."):
+        try:
+            if source_type == "gdrive":
+                # Default Google Drive folder ID
+                folder_id = "1wh67S5wGO2VnJg4IjNWwQrrj99n7qqy6"
                 
-                elif source_type == "local" and source_path:
-                    if os.path.isfile(source_path) and source_path.endswith('.zip'):
-                        with zipfile.ZipFile(source_path, 'r') as zip_ref:
-                            zip_ref.extractall(models_dir)
-                    elif os.path.isdir(source_path):
-                        import shutil
-                        shutil.copytree(source_path, models_dir, dirs_exist_ok=True)
+                # Download the folder directly to models_dir
+                gdown.download_folder(id=folder_id, output=models_dir, quiet=False)
                 
-                elif source_type == "url" and source_path:
-                    import requests
-                    from io import BytesIO
-                    
-                    response = requests.get(source_path)
-                    with zipfile.ZipFile(BytesIO(response.content)) as zip_ref:
-                        zip_ref.extractall(models_dir)
-                
-                # Verify models were downloaded
-                if os.path.exists(models_dir) and os.listdir(models_dir):
-                    st.success("Models loaded successfully")
-                    return True
-                else:
-                    st.error("Failed to load models from specified source")
+                # Check if downloads were successful
+                if not os.listdir(models_dir):
+                    st.error("No files were downloaded from Google Drive")
                     return False
-                    
-            except Exception as e:
-                st.error(f"Model loading failed: {str(e)}")
+            
+            elif source_type == "local" and source_path:
+                if os.path.isfile(source_path) and source_path.endswith('.zip'):
+                    with zipfile.ZipFile(source_path, 'r') as zip_ref:
+                        zip_ref.extractall(models_dir)
+                elif os.path.isdir(source_path):
+                    shutil.copytree(source_path, models_dir, dirs_exist_ok=True)
+            
+            elif source_type == "url" and source_path:
+                import requests
+                from io import BytesIO
+                
+                response = requests.get(source_path)
+                with zipfile.ZipFile(BytesIO(response.content)) as zip_ref:
+                    zip_ref.extractall(models_dir)
+            
+            # Verify models were downloaded
+            if os.path.exists(models_dir) and os.listdir(models_dir):
+                st.success("Models loaded successfully")
+                return True
+            else:
+                st.error("Failed to load models from specified source")
                 return False
-    return True
+                
+        except Exception as e:
+            st.error(f"Model loading failed: {str(e)}")
+            st.code(traceback.format_exc())
+            return False
 
 # Function to ensure image has 3 channels
 def ensure_rgb(image):
@@ -88,87 +85,121 @@ def main():
     models_dir = os.path.join(os.getcwd(), "models")
     checkpoints_dir = os.path.join(models_dir, "checkpoints")
     
-    # Check for models
-    if not download_models(models_dir):
-        st.error("Failed to download models")
-        return
+    # Always show image upload first (for better UX)
+    st.sidebar.header("📷 Upload Image")
+    uploaded_file = st.sidebar.file_uploader("Choose an ultrasound image...", type=["jpg", "png", "jpeg"], key="image_uploader")
+    
+    # Add a divider
+    st.sidebar.markdown("---")
+    st.sidebar.header("Model Selection")
+    
+    # Create models directories if they don't exist
+    os.makedirs(models_dir, exist_ok=True)
+    os.makedirs(checkpoints_dir, exist_ok=True)
+    
+    # Check for models and provide download button
+    download_button = st.sidebar.button("Download/Update Models")
+    if download_button:
+        download_success = download_models(models_dir)
+        if download_success:
+            # Move models to checkpoints directory if needed
+            for item in os.listdir(models_dir):
+                item_path = os.path.join(models_dir, item)
+                if os.path.isdir(item_path) and item != "checkpoints":
+                    try:
+                        target_path = os.path.join(checkpoints_dir, item)
+                        if os.path.exists(target_path):
+                            shutil.rmtree(target_path)
+                        shutil.move(item_path, target_path)
+                        st.sidebar.success(f"Moved {item} to checkpoints")
+                    except Exception as e:
+                        st.sidebar.error(f"Error moving {item}: {str(e)}")
         
-    # Check for checkpoints directory
-    if not os.path.exists(checkpoints_dir):
-        os.makedirs(checkpoints_dir, exist_ok=True)
-        st.warning("Checkpoints directory created but no models found. Please refresh after model download.")
-        return
-        
+            st.experimental_rerun()
+    
     # Model selection
-    available_models = [d for d in os.listdir(checkpoints_dir) 
-                      if os.path.isdir(os.path.join(checkpoints_dir, d))]
+    try:
+        available_models = [d for d in os.listdir(checkpoints_dir) 
+                        if os.path.isdir(os.path.join(checkpoints_dir, d))]
+    except Exception as e:
+        st.error(f"Error listing checkpoint directories: {str(e)}")
+        st.code(traceback.format_exc())
+        available_models = []
     
     if not available_models:
-        st.error("No trained models found in checkpoints directory")
-        return
+        st.warning("No trained models found. Please download models using the sidebar button.")
         
-    selected_model = st.sidebar.selectbox("Select Model", available_models)
+        # Display uploaded image even if no models are available
+        if uploaded_file is not None:
+            try:
+                image = Image.open(uploaded_file)
+                st.image(image, caption='Uploaded Image (No models available for prediction)', use_column_width=True)
+                st.info("No models found. Cannot make predictions.")
+            except Exception as e:
+                st.error(f"Error opening image: {str(e)}")
+        return
+    
+    # Display model selection options
+    selected_model = st.sidebar.selectbox("Available Models", available_models)
+    st.sidebar.info(f"Selected model: {selected_model}")
     
     # Load model and make predictions
     model_path = os.path.join(checkpoints_dir, selected_model, 'model.pth')
+    
+    # Check if model file exists
+    if not os.path.exists(model_path):
+        st.error(f"Model file not found at {model_path}")
+        if uploaded_file is not None:
+            try:
+                image = Image.open(uploaded_file)
+                st.image(image, caption='Uploaded Image (Model file not found)', use_column_width=True)
+            except Exception as e:
+                st.error(f"Error opening image: {str(e)}")
+        return
     
     # Load model with enhanced error handling
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = None  # Initialize model variable
     
     try:
-        # Load model properly with state_dict
-        if os.path.exists(model_path):
-            # Note: This is a safer way to load models, but requires knowledge of the architecture
-            # For the fixed version, we'll use a try-except to handle both loading methods
-            try:
-                # First try loading just the state dict (preferred method)
-                from torchvision import models
-                # This is a placeholder - you should use your actual model architecture
-                model = models.resnet50(pretrained=False)
-                model.fc = torch.nn.Linear(model.fc.in_features, 3)  # 3 classes
-                model.load_state_dict(torch.load(model_path, map_location=device))
-            except Exception as state_dict_error:
-                st.warning(f"Couldn't load state_dict directly: {str(state_dict_error)}. Trying full model load...")
-                # Fallback to loading the entire model object
-                model = torch.load(model_path, map_location=device)
+        st.info(f"Loading model from {model_path}...")
+        try:
+            # First try loading just the state dict (preferred method)
+            from torchvision import models
+            # This is a placeholder - you should use your actual model architecture
+            model = models.resnet50(pretrained=False)
+            model.fc = torch.nn.Linear(model.fc.in_features, 3)  # 3 classes
             
-            if model is not None:
-                model.to(device)
-                model.eval()
-                st.success(f"Successfully loaded {selected_model} model")
-            else:
-                st.error("Failed to initialize model")
-                return
+            # Load the state dict
+            model.load_state_dict(torch.load(model_path, map_location=device))
+            st.success("Loaded model using state_dict approach")
+        except Exception as state_dict_error:
+            st.warning(f"Couldn't load state_dict directly. Trying full model load...")
+            # Fallback to loading the entire model object
+            model = torch.load(model_path, map_location=device)
+            st.success("Loaded full model object")
+        
+        if model is not None:
+            model.to(device)
+            model.eval()
+            st.success(f"Model {selected_model} loaded successfully!")
         else:
-            st.warning(f"Model file not found at {model_path}")
-            if st.sidebar.button("Download missing model"):
-                try:
-                    # Use the same Google Drive folder ID as download_models
-                    folder_id = "1wh67S5wGO2VnJg4IjNWwQrrj99n7qqy6"
-                    
-                    # Download directly to models directory
-                    gdown.download_folder(id=folder_id, output=models_dir, quiet=False)
-                    
-                    st.success("Model downloaded successfully! Please refresh the page.")
-                    return
-                except Exception as download_error:
-                    st.error(f"Failed to download model: {str(download_error)}")
-                    return
+            st.error("Failed to initialize model")
+            return
     except Exception as e:
         st.error(f"Failed to load model: {str(e)}")
-        return
+        st.code(traceback.format_exc())
         
-    # Make sure we have a valid model before proceeding
-    if model is None:
-        st.error("No valid model loaded. Please check model path and try again.")
+        if uploaded_file is not None:
+            try:
+                image = Image.open(uploaded_file)
+                st.image(image, caption='Uploaded Image (Error loading model)', use_column_width=True)
+            except Exception as img_error:
+                st.error(f"Error opening image: {str(img_error)}")
         return
     
-    # Image upload and prediction
-    st.sidebar.header("Upload Image")
-    uploaded_file = st.sidebar.file_uploader("Choose an ultrasound image...", type=["jpg", "png", "jpeg"])
-    
-    if uploaded_file is not None and model is not None:
+    # Process prediction if both model and image are available
+    if uploaded_file is not None:
         try:
             # Open and display image
             image = Image.open(uploaded_file)
@@ -214,12 +245,10 @@ def main():
                 
         except Exception as e:
             st.error(f"Error during prediction: {str(e)}")
-            import traceback
-            st.write(f"Detailed error: {traceback.format_exc()}")
+            st.code(traceback.format_exc())
             st.write("Please ensure the uploaded file is a valid image.")
-    elif uploaded_file is not None and model is None:
-        st.error("Cannot make prediction: Model not properly loaded")
-        st.write("Please check that the model files exist and try again.")
+    else:
+        st.info("📤 Please upload an ultrasound image using the sidebar to get predictions.")
 
 if __name__ == "__main__":
     main()
