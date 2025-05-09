@@ -12,6 +12,13 @@ from torchvision import transforms
 from models.models import get_model
 from utils.visualization import visualize_gradcam
 from configs.config import load_config
+import sys
+try:
+    import gdown
+except ImportError:
+    import subprocess
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "gdown"])
+    import gdown
 
 # Set page configuration
 st.set_page_config(page_title="Breast Cancer Classification", layout="wide")
@@ -164,14 +171,30 @@ def main():
     This application uses deep learning to classify breast ultrasound images as normal, benign, or malignant.
     Upload an ultrasound image to get a prediction.
     """)
-    
     # Sidebar for model selection
     st.sidebar.title("Model Settings")
-    
     # Find available models
     models_dir = os.path.join(os.getcwd(), "models", "checkpoints")
+    if not os.path.exists(models_dir) or not os.listdir(models_dir):
+        st.warning("No models found locally. Attempting to download from Google Drive...")
+        # --- CONFIGURE THIS ---
+        # Set your Google Drive file ID or URL here
+        GDRIVE_FILE_ID = st.secrets["GDRIVE_FILE_ID"] if "GDRIVE_FILE_ID" in st.secrets else "YOUR_FILE_ID_HERE"
+        OUTPUT_ZIP = os.path.join(os.getcwd(), "models.zip")
+        if GDRIVE_FILE_ID != "YOUR_FILE_ID_HERE":
+            gdown.download(f"https://drive.google.com/uc?id={GDRIVE_FILE_ID}", OUTPUT_ZIP, quiet=False)
+            import zipfile
+            with zipfile.ZipFile(OUTPUT_ZIP, 'r') as zip_ref:
+                zip_ref.extractall(os.getcwd())
+            os.remove(OUTPUT_ZIP)
+            st.success("Models downloaded and extracted.")
+        else:
+            st.error("Google Drive file ID not set. Please set GDRIVE_FILE_ID in Streamlit secrets or code.")
+        # Refresh models_dir after download
+        if not os.path.exists(models_dir) or not os.listdir(models_dir):
+            st.error("Model download failed or no models found after extraction.")
+            return
     available_models = [d for d in os.listdir(models_dir) if os.path.isdir(os.path.join(models_dir, d))]
-    
     if not available_models:
         st.error("No trained models found. Please train a model first.")
         return
