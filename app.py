@@ -24,6 +24,31 @@ from utils.visualization import visualize_gradcam
 from configs.config import load_config
 import sys
 import gdown
+import zipfile
+
+def download_models(models_dir, folder_id="1sbVgRPYbewte1EdMn7M9qmRqo0dvCJgi"):
+    """Download models from Google Drive if not available locally"""
+    if not os.path.exists(models_dir) or not os.listdir(models_dir):
+        with st.spinner("Downloading models from Google Drive..."):
+            try:
+                OUTPUT_ZIP = os.path.join(os.getcwd(), "models.zip")
+                gdown.download_folder(id=folder_id, output=OUTPUT_ZIP, quiet=False)
+                
+                with zipfile.ZipFile(OUTPUT_ZIP, 'r') as zip_ref:
+                    zip_ref.extractall(os.getcwd())
+                os.remove(OUTPUT_ZIP)
+                
+                if os.path.exists(models_dir) and os.listdir(models_dir):
+                    st.success("Models downloaded successfully!")
+                    return True
+                else:
+                    st.error("Failed to extract models.")
+                    return False
+                    
+            except Exception as e:
+                st.error(f"Download failed: {str(e)}")
+                return False
+    return True
 
 # Set page configuration
 st.set_page_config(page_title="Breast Cancer Classification", layout="wide")
