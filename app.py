@@ -295,6 +295,24 @@ def main():
     
     if not checkpoint_files:
         st.error(f"No checkpoint files found for model {selected_model}")
+        st.info("Please download the model checkpoints from Google Drive")
+        
+        if st.button("Download missing checkpoints"):
+            with st.spinner("Downloading checkpoints..."):
+                try:
+                    if download_models(models_dir):
+                        checkpoint_files = [f for f in os.listdir(model_dir) if f.endswith(".pth")]
+                        if checkpoint_files:
+                            latest_checkpoint = checkpoint_files[-1]
+                            model_path = os.path.join(model_dir, latest_checkpoint)
+                            st.success("Checkpoints downloaded successfully!")
+                            st.rerun()
+                        else:
+                            st.error("Still no checkpoints found after download")
+                    else:
+                        st.error("Failed to download checkpoints")
+                except Exception as e:
+                    st.error(f"Download error: {str(e)}")
         return
     
     # Use the latest checkpoint
