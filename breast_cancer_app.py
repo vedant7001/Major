@@ -98,6 +98,9 @@ def main():
     os.makedirs(checkpoints_dir, exist_ok=True)
     
     # Check for models and provide download button
+    if "models_downloaded" not in st.session_state:
+        st.session_state.models_downloaded = False
+    
     download_button = st.sidebar.button("Download/Update Models")
     if download_button:
         download_success = download_models(models_dir)
@@ -114,8 +117,10 @@ def main():
                         st.sidebar.success(f"Moved {item} to checkpoints")
                     except Exception as e:
                         st.sidebar.error(f"Error moving {item}: {str(e)}")
-        
-            st.experimental_rerun()
+            
+            # Set flag to trigger rerun
+            st.session_state.models_downloaded = True
+            st.rerun()  # Replace experimental_rerun with rerun
     
     # Model selection
     try:
