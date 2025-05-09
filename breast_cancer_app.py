@@ -17,7 +17,7 @@ st.set_page_config(
 )
 
 # Model download function
-def download_models(models_dir, source_type="gdrive", source_path=None):
+def download_models(models_dir, source_type="gdrive", source_path=None, folder_id="1wh67S5wGO2VnJg4IjNWwQrrj99n7qqy6"):
     """
     Download or load models from different sources
     
@@ -32,11 +32,21 @@ def download_models(models_dir, source_type="gdrive", source_path=None):
     with st.spinner(f"Loading models from {source_type}..."):
         try:
             if source_type == "gdrive":
-                # Default Google Drive folder ID
-                folder_id = "1wh67S5wGO2VnJg4IjNWwQrrj99n7qqy6"
-                
+                # Use the provided folder ID (or default)
                 # Download the folder directly to models_dir
-                gdown.download_folder(id=folder_id, output=models_dir, quiet=False)
+                st.info(f"Downloading from Google Drive folder ID: {folder_id}")
+                try:
+                    # Try the newer API first
+                    gdown.download_folder(id=folder_id, output=models_dir, quiet=False, use_cookies=False)
+                except Exception as e:
+                    st.warning(f"First download attempt failed: {str(e)}")
+                    st.info("Trying alternative download method...")
+                    try:
+                        # Fallback to older API or different parameters
+                        gdown.download_folder(id=folder_id, output=models_dir, quiet=False)
+                    except Exception as e2:
+                        st.error(f"Both download attempts failed: {str(e2)}")
+                        return False
                 
                 # Check if downloads were successful
                 if not os.listdir(models_dir):
@@ -97,15 +107,28 @@ def main():
     os.makedirs(models_dir, exist_ok=True)
     os.makedirs(checkpoints_dir, exist_ok=True)
     
-    # Check for models and provide download button
+    # Check for models and provide download options
     if "models_downloaded" not in st.session_state:
         st.session_state.models_downloaded = False
     
+    # Add custom folder ID option
+    st.sidebar.markdown("### Download Settings")
+    custom_folder = st.sidebar.checkbox("Use custom Google Drive folder ID")
+    folder_id = "1wh67S5wGO2VnJg4IjNWwQrrj99n7qqy6"  # Default folder ID
+    
+    if custom_folder:
+        folder_id = st.sidebar.text_input(
+            "Enter Google Drive Folder ID", 
+            value=folder_id,
+            help="The ID is the part after '/folders/' in your Google Drive URL"
+        )
+    
     download_button = st.sidebar.button("Download/Update Models")
     if download_button:
-        download_success = download_models(models_dir)
+        download_success = download_models(models_dir, folder_id=folder_id)
         if download_success:
             # Move models to checkpoints directory if needed
+            st.info("Processing downloaded files...")
             for item in os.listdir(models_dir):
                 item_path = os.path.join(models_dir, item)
                 if os.path.isdir(item_path) and item != "checkpoints":
@@ -120,7 +143,24 @@ def main():
             
             # Set flag to trigger rerun
             st.session_state.models_downloaded = True
-            st.rerun()  # Replace experimental_rerun with rerun
+            st.rerun()  # Use stable rerun function
+            
+    # Debug button to show model directory structure
+    if st.sidebar.button("Debug Model Directory"):
+        st.sidebar.write("### Models Directory Structure")
+        try:
+            if os.path.exists(models_dir):
+                st.sidebar.write(f"Models dir: {models_dir}")
+                for root, dirs, files in os.walk(models_dir):
+                    rel_path = os.path.relpath(root, models_dir)
+                    if rel_path == ".":
+                        st.sidebar.write(f"- Contents: {', '.join(dirs + files)}")
+                    else:
+                        st.sidebar.write(f"- {rel_path}: {', '.join(files)}")
+            else:
+                st.sidebar.error("Models directory doesn't exist")
+        except Exception as e:
+            st.sidebar.error(f"Error reading directory: {str(e)}")
     
     # Model selection
     try:
@@ -138,7 +178,7 @@ def main():
         if uploaded_file is not None:
             try:
                 image = Image.open(uploaded_file)
-                st.image(image, caption='Uploaded Image (No models available for prediction)', use_column_width=True)
+                st.image(image, caption='Uploaded Image (No models available for prediction)', use_container_width=True)
                 st.info("No models found. Cannot make predictions.")
             except Exception as e:
                 st.error(f"Error opening image: {str(e)}")
@@ -148,16 +188,51 @@ def main():
     selected_model = st.sidebar.selectbox("Available Models", available_models)
     st.sidebar.info(f"Selected model: {selected_model}")
     
-    # Load model and make predictions
-    model_path = os.path.join(checkpoints_dir, selected_model, 'model.pth')
+    # Try to find the model file with various common filenames
+    potential_model_names = ['model.pth', 'best_model.pth', 'weights.pth', 'checkpoint.pth', 
+                          'best.pth', 'final.pth', 'model_best.pth', 'model.pt', 'best_model.pt']
+    
+    model_dir = os.path.join(checkpoints_dir, selected_model)
+    model_path = None
+    
+    # First, list all files in the directory to help with debugging
+    st.info(f"Looking for model files in: {model_dir}")
+    if os.path.exists(model_dir):
+        files_in_dir = os.listdir(model_dir)
+        if files_in_dir:
+            st.info(f"Files found in model directory: {', '.join(files_in_dir)}")
+            
+            # Check for any .pth or .pt files
+            pth_files = [f for f in files_in_dir if f.endswith('.pth') or f.endswith('.pt')]
+            if pth_files:
+                # Use the first .pth or .pt file found
+                model_path = os.path.join(model_dir, pth_files[0])
+                st.success(f"Found model file: {pth_files[0]}")
+            else:
+                # Try common model filenames
+                for name in potential_model_names:
+                    temp_path = os.path.join(model_dir, name)
+                    if os.path.exists(temp_path):
+                        model_path = temp_path
+                        st.success(f"Found model file: {name}")
+                        break
+        else:
+            st.error(f"Model directory exists but is empty")
+    else:
+        st.error(f"Model directory not found: {model_dir}")
     
     # Check if model file exists
-    if not os.path.exists(model_path):
-        st.error(f"Model file not found at {model_path}")
+    if model_path is None or not os.path.exists(model_path):
+        st.error(f"No model file found in {model_dir}")
+        
+        # Provide info about the model download process
+        st.warning("Please ensure you've downloaded the models correctly using the 'Download/Update Models' button.")
+        st.info("If the problem persists, check that the Google Drive folder ID is correct and accessible.")
+        
         if uploaded_file is not None:
             try:
                 image = Image.open(uploaded_file)
-                st.image(image, caption='Uploaded Image (Model file not found)', use_column_width=True)
+                st.image(image, caption='Uploaded Image (Model file not found)', use_container_width=True)
             except Exception as e:
                 st.error(f"Error opening image: {str(e)}")
         return
@@ -198,7 +273,7 @@ def main():
         if uploaded_file is not None:
             try:
                 image = Image.open(uploaded_file)
-                st.image(image, caption='Uploaded Image (Error loading model)', use_column_width=True)
+                st.image(image, caption='Uploaded Image (Error loading model)', use_container_width=True)
             except Exception as img_error:
                 st.error(f"Error opening image: {str(img_error)}")
         return
@@ -208,7 +283,7 @@ def main():
         try:
             # Open and display image
             image = Image.open(uploaded_file)
-            st.image(image, caption='Uploaded Ultrasound Image', use_column_width=True)
+            st.image(image, caption='Uploaded Ultrasound Image', use_container_width=True)
             
             # Ensure image is RGB
             image = ensure_rgb(image)
