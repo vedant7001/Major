@@ -147,6 +147,13 @@ def main():
         
         if not checkpoint_files:
             st.error(f"No checkpoint files found for {selected_model}")
+            if st.button("Download missing checkpoints"):
+                if download_models(models_dir):
+                    checkpoint_files = [f for f in os.listdir(model_dir) if f.endswith(".pth")]
+                    if checkpoint_files:
+                        latest_checkpoint = checkpoint_files[-1]
+                        model_path = os.path.join(model_dir, latest_checkpoint)
+                        st.rerun()
             return
             
         latest_checkpoint = checkpoint_files[-1]
