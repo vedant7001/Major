@@ -23,21 +23,52 @@ st.set_page_config(
 )
 
 # Model download function
-def download_models(models_dir, folder_id="1wh67S5wGO2VnJg4IjNWwQrrj99n7qqy6"):
+def download_models(models_dir, source_type="gdrive", source_path=None):
+    """
+    Download or load models from different sources
+    
+    Args:
+        models_dir (str): Directory to save models
+        source_type (str): Source type - 'gdrive', 'local', or 'url'
+        source_path (str): Path/URL to models (required for 'local' and 'url' types)
+    """
     if not os.path.exists(models_dir) or not os.listdir(models_dir):
-        with st.spinner("Downloading models from Google Drive..."):
+        with st.spinner(f"Loading models from {source_type}..."):
             try:
-                OUTPUT_ZIP = os.path.join(os.getcwd(), "models.zip")
-                gdown.download_folder(id=folder_id, output=OUTPUT_ZIP, quiet=False)
+                if source_type == "gdrive":
+                    # Default Google Drive folder ID
+                    folder_id = "1wh67S5wGO2VnJg4IjNWwQrrj99n7qqy6"
+                    OUTPUT_ZIP = os.path.join(os.getcwd(), "models.zip")
+                    gdown.download_folder(id=folder_id, output=OUTPUT_ZIP, quiet=False)
+                    
+                    with zipfile.ZipFile(OUTPUT_ZIP, 'r') as zip_ref:
+                        zip_ref.extractall(os.getcwd())
+                    os.remove(OUTPUT_ZIP)
                 
-                with zipfile.ZipFile(OUTPUT_ZIP, 'r') as zip_ref:
-                    zip_ref.extractall(os.getcwd())
-                os.remove(OUTPUT_ZIP)
+                elif source_type == "local" and source_path:
+                    if os.path.isfile(source_path) and source_path.endswith('.zip'):
+                        with zipfile.ZipFile(source_path, 'r') as zip_ref:
+                            zip_ref.extractall(models_dir)
+                    elif os.path.isdir(source_path):
+                        import shutil
+                        shutil.copytree(source_path, models_dir, dirs_exist_ok=True)
+                
+                elif source_type == "url" and source_path:
+                    import requests
+                    from io import BytesIO
+                    
+                    response = requests.get(source_path)
+                    with zipfile.ZipFile(BytesIO(response.content)) as zip_ref:
+                        zip_ref.extractall(models_dir)
                 
                 if os.path.exists(models_dir) and os.listdir(models_dir):
                     return True
+                else:
+                    st.error("Failed to load models from specified source")
+                    return False
+                    
             except Exception as e:
-                st.error(f"Download failed: {str(e)}")
+                st.error(f"Model loading failed: {str(e)}")
                 return False
     return True
 
