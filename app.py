@@ -56,9 +56,9 @@ def load_model(model_path, config):
         if "__path__" in str(e):
             st.error("Error loading model: Streamlit watcher conflict with PyTorch")
             return None, None
-        except Exception as e:
-            st.error(f"Unexpected error loading model: {str(e)}")
-            return None, None
+    except Exception as e:
+        st.error(f"Unexpected error loading model: {str(e)}")
+        return None, None
     
     # Load model weights
     try:
