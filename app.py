@@ -8,6 +8,12 @@ from PIL import Image
 import io
 import cv2
 from torchvision import transforms
+import asyncio
+import nest_asyncio
+
+# Initialize event loop for Streamlit
+nest_asyncio.apply()
+asyncio.set_event_loop(asyncio.new_event_loop())
 
 from models.models import get_model
 from utils.visualization import visualize_gradcam
@@ -23,13 +29,19 @@ def load_model(model_path, config):
     """Load a trained model"""
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
-    # Create model
-    model = get_model(
-        config['model']['model_name'],
-        num_classes=config['model']['num_classes'],
-        pretrained=False,
-        version=config['model']['version']
-    )
+    # Create model with error handling for PyTorch classes
+    try:
+        model = get_model(
+            config['model']['model_name'],
+            num_classes=config['model']['num_classes'],
+            pretrained=False,
+            version=config['model']['version']
+        )
+    except RuntimeError as e:
+        if "Tried to instantiate class" in str(e):
+            st.error("Error loading model: PyTorch class initialization failed")
+            return None, None
+        raise
     
     # Load model weights
     checkpoint = torch.load(model_path, map_location=device)
@@ -172,19 +184,30 @@ def main():
     models_dir = os.path.join(os.getcwd(), "models", "checkpoints")
     if not os.path.exists(models_dir) or not os.listdir(models_dir):
         st.warning("No models found locally. Attempting to download from Google Drive...")
-        # --- CONFIGURE THIS ---
-        # Set your Google Drive file ID or URL here
-        GDRIVE_FILE_ID = st.secrets["GDRIVE_FILE_ID"] if "GDRIVE_FILE_ID" in st.secrets else "YOUR_FILE_ID_HERE"
+        # Google Drive folder ID for model files
+        folder_id = "1wh67S5wGO2VnJg4IjNWwQrrj99n7qqy6"
         OUTPUT_ZIP = os.path.join(os.getcwd(), "models.zip")
-        if GDRIVE_FILE_ID != "YOUR_FILE_ID_HERE":
-            gdown.download(f"https://drive.google.com/uc?id={GDRIVE_FILE_ID}", OUTPUT_ZIP, quiet=False)
+        
+        try:
+            # Download the entire folder as zip
+            gdown.download_folder(id=folder_id, output=OUTPUT_ZIP, quiet=False)
+            
+            # Extract the zip file
             import zipfile
             with zipfile.ZipFile(OUTPUT_ZIP, 'r') as zip_ref:
                 zip_ref.extractall(os.getcwd())
             os.remove(OUTPUT_ZIP)
-            st.success("Models downloaded and extracted.")
-        else:
-            st.error("Google Drive file ID not set. Please set GDRIVE_FILE_ID in Streamlit secrets or code.")
+            
+            # Verify extraction
+            if os.path.exists(models_dir) and os.listdir(models_dir):
+                st.success("Models successfully downloaded and extracted from Google Drive.")
+            else:
+                st.error("Failed to extract models. Please check the Google Drive folder contents.")
+                return
+                
+        except Exception as e:
+            st.error(f"Error downloading models from Google Drive: {str(e)}")
+            return
         # Refresh models_dir after download
         if not os.path.exists(models_dir) or not os.listdir(models_dir):
             st.error("Model download failed or no models found after extraction.")
