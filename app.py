@@ -11,13 +11,24 @@ from torchvision import transforms
 import asyncio
 import nest_asyncio
 
-# Initialize event loop for Streamlit with error handling
+# Initialize event loop for Streamlit with enhanced error handling
 try:
     nest_asyncio.apply()
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
+    
+    # Prevent Streamlit from inspecting PyTorch modules
+    import warnings
+    warnings.filterwarnings('ignore', category=UserWarning, message='.*__path__._path.*')
+    
+except RuntimeError as e:
+    if "no running event loop" in str(e):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    else:
+        st.error(f"Error initializing event loop: {str(e)}")
 except Exception as e:
-    st.error(f"Error initializing event loop: {str(e)}")
+    st.error(f"Unexpected error initializing event loop: {str(e)}")
 
 from models.models import get_model
 from utils.visualization import visualize_gradcam
@@ -69,21 +80,38 @@ def load_model(model_path, config):
         
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
+            warnings.filterwarnings('ignore', category=UserWarning, message='.*__path__._path.*')
             
             # Initialize new event loop for PyTorch operations
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            
-            model = get_model(
-                config['model']['model_name'],
-                num_classes=config['model']['num_classes'],
-                pretrained=False,
-                version=config['model']['version']
-            )
-            
-            # Restore original event loop
-            loop.close()
-            asyncio.set_event_loop(asyncio.new_event_loop())
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                
+                model = get_model(
+                    config['model']['model_name'],
+                    num_classes=config['model']['num_classes'],
+                    pretrained=False,
+                    version=config['model']['version']
+                )
+                
+                # Restore original event loop
+                loop.close()
+                asyncio.set_event_loop(asyncio.new_event_loop())
+                
+            except RuntimeError as e:
+                if "no running event loop" in str(e):
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    model = get_model(
+                        config['model']['model_name'],
+                        num_classes=config['model']['num_classes'],
+                        pretrained=False,
+                        version=config['model']['version']
+                    )
+                    loop.close()
+                    asyncio.set_event_loop(asyncio.new_event_loop())
+                else:
+                    raise
             
     except RuntimeError as e:
         if "Tried to instantiate class" in str(e):
