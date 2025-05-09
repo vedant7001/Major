@@ -67,7 +67,25 @@ def load_model(model_path, config):
         model = model.to(device)
         model.eval()
     except Exception as e:
-        st.error(f"Error loading model weights: {str(e)}")
+        if "No such file or directory" in str(e):
+            st.warning(f"Checkpoint file not found at {model_path}")
+            if st.button("Download model from Google Drive"):
+                try:
+                    # Google Drive file ID for the model
+                    file_id = "1wh67S5wGO2VnJg4IjNWwQrrj99n7qqy6"
+                    output = f"{os.path.dirname(model_path)}/downloaded_model.pth"
+                    gdown.download(f"https://drive.google.com/uc?id={file_id}", output, quiet=False)
+                    checkpoint = torch.load(output, map_location=device)
+                    model.load_state_dict(checkpoint['model_state_dict'])
+                    model = model.to(device)
+                    model.eval()
+                    st.success("Model downloaded successfully!")
+                    return model, device
+                except Exception as download_error:
+                    st.error(f"Failed to download model: {str(download_error)}")
+                    return None, None
+        else:
+            st.error(f"Error loading model weights: {str(e)}")
         return None, None
     
     return model, device

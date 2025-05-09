@@ -34,14 +34,17 @@ def load_model(model_path, config):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
     try:
-        # Create model
+        # Create model with error handling for PyTorch classes
         with st.spinner("Initializing model..."):
-            model = get_model(
-                config['model']['model_name'],
-                num_classes=config['model']['num_classes'],
-                pretrained=False,
-                version=config['model']['version']
-            )
+            import warnings
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                model = get_model(
+                    config['model']['model_name'],
+                    num_classes=config['model']['num_classes'],
+                    pretrained=False,
+                    version=config['model']['version']
+                )
             
         # Load weights
         with st.spinner("Loading model weights..."):
@@ -52,8 +55,17 @@ def load_model(model_path, config):
             
         return model, device
         
+    except RuntimeError as e:
+        if "Tried to instantiate class" in str(e):
+            st.error("Error loading model: PyTorch class initialization failed")
+            return None, None
+        raise
+    except AttributeError as e:
+        if "__path__" in str(e):
+            st.error("Error loading model: Streamlit watcher conflict with PyTorch")
+            return None, None
     except Exception as e:
-        st.error(f"Error loading model: {str(e)}")
+        st.error(f"Unexpected error loading model: {str(e)}")
         return None, None
 
 def preprocess_image(image, config):
