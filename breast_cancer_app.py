@@ -94,14 +94,33 @@ def main():
     # Load model and make predictions
     model_path = os.path.join(models_dir, selected_model, 'model.pth')
     
-    # Load model with error handling
+    # Load model with enhanced error handling
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     try:
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         model = torch.load(model_path, map_location=device)
         model.eval()
         st.success(f"Successfully loaded {selected_model} model")
     except Exception as e:
-        st.error(f"Failed to load model: {str(e)}")
+        if "No such file or directory" in str(e):
+            st.warning(f"Model file not found at {model_path}")
+            if st.sidebar.button("Download missing model"):
+                try:
+                    # Use the same Google Drive folder ID as download_models
+                    folder_id = "1wh67S5wGO2VnJg4IjNWwQrrj99n7qqy6"
+                    OUTPUT_ZIP = os.path.join(os.getcwd(), "models.zip")
+                    gdown.download_folder(id=folder_id, output=OUTPUT_ZIP, quiet=False)
+                    
+                    with zipfile.ZipFile(OUTPUT_ZIP, 'r') as zip_ref:
+                        zip_ref.extractall(os.getcwd())
+                    os.remove(OUTPUT_ZIP)
+                    
+                    st.success("Model downloaded successfully! Please refresh the page.")
+                    return
+                except Exception as download_error:
+                    st.error(f"Failed to download model: {str(download_error)}")
+                    return
+        else:
+            st.error(f"Failed to load model: {str(e)}")
         return
     
     # Image upload and prediction
