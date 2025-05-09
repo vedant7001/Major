@@ -13,12 +13,7 @@ from models.models import get_model
 from utils.visualization import visualize_gradcam
 from configs.config import load_config
 import sys
-try:
-    import gdown
-except ImportError:
-    import subprocess
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "gdown"])
-    import gdown
+import gdown
 
 # Set page configuration
 st.set_page_config(page_title="Breast Cancer Classification", layout="wide")
