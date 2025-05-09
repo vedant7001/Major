@@ -34,27 +34,48 @@ def load_model(model_path, config):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
     try:
-        # Create model with error handling for PyTorch classes
-        with st.spinner("Initializing model..."):
-            import warnings
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
+        # Disable Streamlit file watcher during model loading
+        import warnings
+        from streamlit.runtime.scriptrunner import RerunData, RerunException
+        
+        # Temporarily disable Streamlit's file watcher
+        st.runtime.scriptrunner.add_script_run_ctx = lambda *args, **kwargs: None
+        
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            warnings.filterwarnings('ignore', category=UserWarning, message='.*__path__._path.*')
+            
+            # Initialize new event loop for PyTorch operations
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                
                 model = get_model(
                     config['model']['model_name'],
                     num_classes=config['model']['num_classes'],
                     pretrained=False,
                     version=config['model']['version']
                 )
+                
+                # Restore original event loop
+                loop.close()
+                asyncio.set_event_loop(asyncio.new_event_loop())
+                
+            except RuntimeError as e:
+                if "no running event loop" in str(e):
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    model = get_model(
+                        config['model']['model_name'],
+                        num_classes=config['model']['num_classes'],
+                        pretrained=False,
+                        version=config['model']['version']
+                    )
+                    loop.close()
+                    asyncio.set_event_loop(asyncio.new_event_loop())
+                else:
+                    raise
             
-        # Load weights
-        with st.spinner("Loading model weights..."):
-            checkpoint = torch.load(model_path, map_location=device)
-            model.load_state_dict(checkpoint['model_state_dict'])
-            model = model.to(device)
-            model.eval()
-            
-        return model, device
-        
     except RuntimeError as e:
         if "Tried to instantiate class" in str(e):
             st.error("Error loading model: PyTorch class initialization failed")
@@ -67,6 +88,18 @@ def load_model(model_path, config):
     except Exception as e:
         st.error(f"Unexpected error loading model: {str(e)}")
         return None, None
+    
+    # Load model weights
+    try:
+        checkpoint = torch.load(model_path, map_location=device)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        model = model.to(device)
+        model.eval()
+    except Exception as e:
+        st.error(f"Error loading model weights: {str(e)}")
+        return None, None
+    
+    return model, device
 
 def preprocess_image(image, config):
     """Preprocess an image for model input"""
