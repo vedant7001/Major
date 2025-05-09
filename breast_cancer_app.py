@@ -114,6 +114,8 @@ def main():
     
     # Load model with enhanced error handling
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = None  # Initialize model variable
+    
     try:
         # Load model properly with state_dict
         if os.path.exists(model_path):
@@ -126,13 +128,18 @@ def main():
                 model = models.resnet50(pretrained=False)
                 model.fc = torch.nn.Linear(model.fc.in_features, 3)  # 3 classes
                 model.load_state_dict(torch.load(model_path, map_location=device))
-            except:
+            except Exception as state_dict_error:
+                st.warning(f"Couldn't load state_dict directly: {str(state_dict_error)}. Trying full model load...")
                 # Fallback to loading the entire model object
                 model = torch.load(model_path, map_location=device)
-                
-            model.to(device)
-            model.eval()
-            st.success(f"Successfully loaded {selected_model} model")
+            
+            if model is not None:
+                model.to(device)
+                model.eval()
+                st.success(f"Successfully loaded {selected_model} model")
+            else:
+                st.error("Failed to initialize model")
+                return
         else:
             st.warning(f"Model file not found at {model_path}")
             if st.sidebar.button("Download missing model"):
@@ -151,12 +158,17 @@ def main():
     except Exception as e:
         st.error(f"Failed to load model: {str(e)}")
         return
+        
+    # Make sure we have a valid model before proceeding
+    if model is None:
+        st.error("No valid model loaded. Please check model path and try again.")
+        return
     
     # Image upload and prediction
     st.sidebar.header("Upload Image")
     uploaded_file = st.sidebar.file_uploader("Choose an ultrasound image...", type=["jpg", "png", "jpeg"])
     
-    if uploaded_file is not None:
+    if uploaded_file is not None and model is not None:
         try:
             # Open and display image
             image = Image.open(uploaded_file)
@@ -172,6 +184,7 @@ def main():
                 transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
             ])
             
+            # Create tensor and move to device
             image_tensor = transform(image).unsqueeze(0).to(device)
             
             # Make prediction
@@ -201,7 +214,12 @@ def main():
                 
         except Exception as e:
             st.error(f"Error during prediction: {str(e)}")
+            import traceback
+            st.write(f"Detailed error: {traceback.format_exc()}")
             st.write("Please ensure the uploaded file is a valid image.")
+    elif uploaded_file is not None and model is None:
+        st.error("Cannot make prediction: Model not properly loaded")
+        st.write("Please check that the model files exist and try again.")
 
 if __name__ == "__main__":
     main()
