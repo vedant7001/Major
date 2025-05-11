@@ -1,11 +1,21 @@
 import os
 import streamlit as st
-import torch
-import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
 import io
+
+# Try to import PyTorch, but continue if not available
+TORCH_AVAILABLE = False
+try:
+    import torch
+    import torch.nn as nn
+    from torchvision import transforms
+    TORCH_AVAILABLE = True
+except ImportError:
+    st.warning("PyTorch is not installed. Running in minimal mode.")
+
+# Try to import OpenCV
 try:
     import cv2
 except ImportError:
@@ -29,40 +39,65 @@ except ImportError:
     
     cv2 = MinimalCV2()
 
-from torchvision import transforms
-import asyncio
-import nest_asyncio
-
-# Initialize event loop for Streamlit with enhanced error handling
+# Try to import async libraries
 try:
-    nest_asyncio.apply()
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+    import asyncio
+    import nest_asyncio
     
-    # Prevent Streamlit from inspecting PyTorch modules
-    import warnings
-    warnings.filterwarnings('ignore', category=UserWarning, message='.*__path__._path.*')
-    
-except RuntimeError as e:
-    if "no running event loop" in str(e):
+    # Initialize event loop for Streamlit with enhanced error handling
+    try:
+        nest_asyncio.apply()
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-    else:
-        st.error(f"Error initializing event loop: {str(e)}")
-except Exception as e:
-    st.error(f"Unexpected error initializing event loop: {str(e)}")
+        
+        # Prevent Streamlit from inspecting PyTorch modules if PyTorch is available
+        if TORCH_AVAILABLE:
+            import warnings
+            warnings.filterwarnings('ignore', category=UserWarning, message='.*__path__._path.*')
+        
+    except RuntimeError as e:
+        if "no running event loop" in str(e):
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        else:
+            st.error(f"Error initializing event loop: {str(e)}")
+    except Exception as e:
+        st.error(f"Unexpected error initializing event loop: {str(e)}")
+except ImportError:
+    st.warning("Async libraries not available. Some functionality may be limited.")
 
 # Import model-related functions with fallbacks
 MODEL_IMPORT_ERROR = False
-try:
-    from models.models import get_model
-    from utils.visualization import visualize_gradcam
-    from configs.config import load_config
-except ImportError as e:
+if TORCH_AVAILABLE:
+    try:
+        from models.models import get_model
+        from utils.visualization import visualize_gradcam
+        from configs.config import load_config
+    except ImportError as e:
+        MODEL_IMPORT_ERROR = True
+        st.error(f"Could not import required modules: {str(e)}")
+        st.warning("We'll still try to run the app with minimal functionality.")
+        
+        # Create stub functions
+        def get_model(model_name, num_classes=3, pretrained=False, version=None):
+            return None
+            
+        def visualize_gradcam(*args, **kwargs):
+            return None
+            
+        def load_config(config_path):
+            return {
+                "model": {
+                    "model_name": "stub",
+                    "version": "stub",
+                    "num_classes": 3
+                },
+                "data": {
+                    "img_size": 224
+                }
+            }
+else:
     MODEL_IMPORT_ERROR = True
-    st.error(f"Could not import required modules: {str(e)}")
-    st.warning("We'll still try to run the app with minimal functionality.")
-    
     # Create stub functions
     def get_model(model_name, num_classes=3, pretrained=False, version=None):
         return None
@@ -88,6 +123,10 @@ import zipfile
 
 def download_models(models_dir, folder_id="1sbVgRPYbewte1EdMn7M9qmRqo0dvCJgi"):
     """Download models from Google Drive if not available locally"""
+    if not TORCH_AVAILABLE:
+        st.error("PyTorch is not installed. Cannot download or use models.")
+        return False
+        
     if not os.path.exists(models_dir) or not os.listdir(models_dir):
         with st.spinner("Downloading models from Google Drive..."):
             try:
@@ -116,6 +155,9 @@ st.set_page_config(page_title="Breast Cancer Classification", layout="wide")
 # Define functions
 def load_model(model_path, config):
     """Load a trained model with enhanced error handling"""
+    if not TORCH_AVAILABLE:
+        return None, None
+        
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
     try:
@@ -175,6 +217,9 @@ def load_model(model_path, config):
 
 def preprocess_image(image, config):
     """Preprocess an image for model input"""
+    if not TORCH_AVAILABLE:
+        return None
+        
     # Define preprocessing transforms
     preprocess = transforms.Compose([
         transforms.Resize((config['data']['img_size'], config['data']['img_size'])),
@@ -188,6 +233,9 @@ def preprocess_image(image, config):
 
 def predict(model, image_tensor, device, class_names):
     """Make a prediction on an image"""
+    if not TORCH_AVAILABLE or model is None or image_tensor is None:
+        return None, None, "Prediction unavailable"
+        
     # Add batch dimension
     image_tensor = image_tensor.unsqueeze(0).to(device)
     
@@ -204,6 +252,9 @@ def predict(model, image_tensor, device, class_names):
 
 def generate_gradcam(model, image_tensor, device, class_idx):
     """Generate Grad-CAM visualization for the model's decision"""
+    if not TORCH_AVAILABLE or model is None or image_tensor is None:
+        return None
+        
     # Add hooks to the model
     activation = {}
     gradients = {}
@@ -287,10 +338,10 @@ def main():
     # Define class names
     class_names = ["Normal", "Benign", "Malignant"]
     
-    # Check if model imports failed
-    if MODEL_IMPORT_ERROR:
-        st.error("Model loading components are missing. The app is running in minimal mode.")
-        st.info("This app requires additional model files that aren't currently available.")
+    # Check if PyTorch is not available or model imports failed
+    if not TORCH_AVAILABLE or MODEL_IMPORT_ERROR:
+        st.warning("PyTorch is not installed or model components are missing. The app is running in minimal mode.")
+        st.info("This app requires PyTorch and additional model files that aren't currently available.")
         
         st.markdown("""
         ### How to Use This App:
