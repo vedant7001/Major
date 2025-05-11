@@ -1,136 +1,58 @@
-# Breast Cancer Classification using CNN Models
+# Breast Cancer Classification App
 
-This project implements and compares three different CNN architectures (DenseNet, ResNet, and EfficientNet) for breast cancer classification using ultrasound or mammography images. The included notebook.ipynb file allows you to run this project directly on Google Colab.
-
-## Project Structure
-
-```
-breast_cancer_classification/
-│
-├── configs/               # Configuration files
-│   └── config.py          # Configuration utilities
-│
-├── data/                  # Data loading and preprocessing
-│   └── dataset.py         # Dataset classes and data loaders
-│
-├── models/                # Model definitions
-│   └── models.py          # CNN model architectures
-│
-├── utils/                 # Utility functions
-│   ├── train_utils.py     # Training and evaluation utilities
-│   └── visualization.py   # Visualization utilities
-│
-├── results/               # Results directory (created during training)
-│
-├── train.py               # Main training script
-├── evaluate.py            # Evaluation script
-├── notebook.ipynb         # Jupyter notebook for Colab
-└── README.md              # Project documentation
-```
-
-## Google Colab
-
-A Jupyter notebook (`notebook.ipynb`) is provided to run this project on Google Colab. The notebook:
-- Clones this repository
-- Sets up the environment
-- Downloads and prepares the breast cancer dataset
-- Trains and evaluates models
-- Visualizes results
-
-To use the notebook:
-1. Open Google Colab (https://colab.research.google.com/)
-2. Go to File > Open notebook
-3. Select the GitHub tab
-4. Enter the repository URL: https://github.com/vedant7001/Major
-5. Select the notebook.ipynb file
+This application uses deep learning to classify breast ultrasound images as Normal, Benign, or Malignant.
 
 ## Features
 
-- Implementation of three CNN architectures:
-  - DenseNet121 (or DenseNet169)
-  - ResNet50 (or ResNet18/101)
-  - EfficientNetB0 (or EfficientNetB3)
-- Data preprocessing and augmentation
-- Training with early stopping and learning rate scheduling
-- Evaluation metrics: Accuracy, Precision, Recall, F1-Score, AUC
-- Visualization of results:
-  - Training/validation curves
-  - Confusion matrices
-  - ROC curves
-  - Feature maps and Grad-CAM visualizations
-- Model comparison tools
+- Multiple model architectures: DenseNet-121, ResNet-50, and EfficientNet-B3
+- Real-time prediction with confidence scores
+- GradCAM visualization to highlight areas of interest in the image
+- User-friendly interface for medical professionals
 
-## Requirements
+## How to Use
 
-- Python 3.7+
-- PyTorch 1.7+
-- torchvision
-- numpy
-- scikit-learn
-- matplotlib
-- seaborn
-- tqdm
-- PyYAML
-- opencv-python
+1. Visit the deployed app at: [Breast Cancer Classification App](https://your-username-major.streamlit.app)
+2. Upload a breast ultrasound image
+3. Select a model architecture from the sidebar
+4. View the prediction results and confidence scores
+5. Examine the GradCAM visualization to understand influential regions
 
-You can install the required packages using:
+## Local Development
 
+### Prerequisites
+- Python 3.9+
+- pip
+
+### Installation
 ```bash
-pip install torch torchvision numpy scikit-learn matplotlib seaborn tqdm pyyaml opencv-python
+git clone https://github.com/vedant7001/Major.git
+cd Major
+pip install -r requirements.txt
 ```
 
-## Dataset
-
-The code is designed to work with standard image classification datasets where each class has its own directory. For example:
-
-```
-data/
-├── benign/
-│   ├── image1.jpg
-│   ├── image2.jpg
-│   └── ...
-├── malignant/
-│   ├── image1.jpg
-│   ├── image2.jpg
-│   └── ...
-└── normal/
-    ├── image1.jpg
-    ├── image2.jpg
-    └── ...
-```
-
-You can use public datasets like:
-- [BUSI (Breast Ultrasound Images)](https://scholar.cu.edu.eg/Dataset_BUSI.zip)
-- [mini-MIAS (Mammographic Image Analysis Society)](http://peipa.essex.ac.uk/info/mias.html)
-
-## Usage
-
-### Training
-
-To train a single model:
-
+### Running Locally
 ```bash
-python train.py --model-name densenet --version 121 --data-dir path/to/dataset --batch-size 32 --epochs 30
+streamlit run streamlit_app.py
 ```
 
-Common options:
-- `--model-name`: Model architecture (`densenet`, `resnet`, or `efficientnet`)
-- `--version`: Model version (`121`, `169` for DenseNet; `18`, `50`, `101` for ResNet; `b0`, `b3` for EfficientNet)
-- `--data-dir`: Path to the dataset
-- `--batch-size`: Batch size for training
-- `--epochs`: Number of training epochs
-- `--lr`: Learning rate
-- `--no-pretrained`: Disable use of pretrained weights
-- `--no-augment`: Disable data augmentation
+## Models
 
-You can also use a configuration file:
+The application uses three pre-trained deep learning models:
 
-```bash
-python train.py --config path/to/config.yaml
-```
+1. **DenseNet-121**: Excellent feature extraction with dense connectivity
+2. **ResNet-50**: Deep residual learning framework with skip connections
+3. **EfficientNet-B3**: Balanced performance and efficiency with compound scaling
 
-To train and compare multiple models, uncomment the `train_multiple_models()` line in `train.py` and run:
+Each model was trained on the BUSI dataset (Breast Ultrasound Images) and achieves high accuracy in classification tasks.
 
-```bash
-python train.py
-```
+## Deployment
+
+This app is deployed on Streamlit Community Cloud. For detailed deployment instructions, see [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md).
+
+## License
+
+[MIT License](LICENSE)
+
+## Contact
+
+For questions or feedback, please contact [your-email].
