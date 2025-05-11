@@ -6,7 +6,29 @@ import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
 import io
-import cv2
+try:
+    import cv2
+except ImportError:
+    st.error("Could not import OpenCV (cv2). Some functionality may be limited.")
+    # Create a minimal cv2 replacement with just what we need
+    class MinimalCV2:
+        def __init__(self):
+            self.COLORMAP_JET = None
+        
+        def resize(self, img, size):
+            # Placeholder for resize
+            return img
+            
+        def applyColorMap(self, img, colormap):
+            # Return original image if colormap not available
+            return img
+            
+        def cvtColor(self, img, code):
+            # Return original image
+            return img
+    
+    cv2 = MinimalCV2()
+
 from torchvision import transforms
 import asyncio
 import nest_asyncio
@@ -30,13 +52,35 @@ except RuntimeError as e:
 except Exception as e:
     st.error(f"Unexpected error initializing event loop: {str(e)}")
 
-# Import model-related functions
+# Import model-related functions with fallbacks
+MODEL_IMPORT_ERROR = False
 try:
     from models.models import get_model
     from utils.visualization import visualize_gradcam
     from configs.config import load_config
-except ImportError:
-    st.error("Could not import required modules. Make sure they're available in the deployed environment.")
+except ImportError as e:
+    MODEL_IMPORT_ERROR = True
+    st.error(f"Could not import required modules: {str(e)}")
+    st.warning("We'll still try to run the app with minimal functionality.")
+    
+    # Create stub functions
+    def get_model(model_name, num_classes=3, pretrained=False, version=None):
+        return None
+        
+    def visualize_gradcam(*args, **kwargs):
+        return None
+        
+    def load_config(config_path):
+        return {
+            "model": {
+                "model_name": "stub",
+                "version": "stub",
+                "num_classes": 3
+            },
+            "data": {
+                "img_size": 224
+            }
+        }
 
 import sys
 import gdown
@@ -242,6 +286,34 @@ def main():
     
     # Define class names
     class_names = ["Normal", "Benign", "Malignant"]
+    
+    # Check if model imports failed
+    if MODEL_IMPORT_ERROR:
+        st.error("Model loading components are missing. The app is running in minimal mode.")
+        st.info("This app requires additional model files that aren't currently available.")
+        
+        st.markdown("""
+        ### How to Use This App:
+        
+        When properly set up, this application allows you to:
+        
+        1. Upload a breast ultrasound image
+        2. Select a model architecture from the sidebar
+        3. Get a classification prediction (Normal, Benign, or Malignant)
+        4. See confidence scores for each class
+        5. View a GradCAM visualization highlighting important regions
+        
+        ### Sample Visualization
+        
+        ![Sample Classification](https://miro.medium.com/max/1400/1*uEQ4AvmI69hjFvXr9twJLA.png)
+        
+        ### Learn More
+        
+        - [Understanding Breast Cancer Ultrasound Classification](https://www.cancer.org/cancer/breast-cancer/screening-tests-and-early-detection/breast-ultrasound.html)
+        - [What is GradCAM?](https://arxiv.org/abs/1610.02391)
+        """)
+        
+        return
     
     # Sidebar for model selection
     st.sidebar.title("Model Selection")
